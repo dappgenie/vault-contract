@@ -1,0 +1,123 @@
+{
+	"compiler": {
+		"version": "0.8.23+commit.f704f362"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_trader",
+						"type": "address"
+					}
+				],
+				"name": "addTrader",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address[]",
+						"name": "_initialAssets",
+						"type": "address[]"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_performanceFee",
+						"type": "uint256"
+					}
+				],
+				"name": "createVault",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "_vaultIndex",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address",
+						"name": "_asset1",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_amount1",
+						"type": "uint256"
+					},
+					{
+						"internalType": "address",
+						"name": "_asset2",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "_amount2",
+						"type": "uint256"
+					}
+				],
+				"name": "executeTrade",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_trader",
+						"type": "address"
+					}
+				],
+				"name": "removeTrader",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/vault/VaultManager/IVaultManager.sol": "IVaultManager"
+		},
+		"evmVersion": "shanghai",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/vault/VaultManager/IVaultManager.sol": {
+			"keccak256": "0xb2d2b298a8a03f3446f6665f5f47a81d01e9503b398fa037e5bab9e392ed7e50",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://d87e9586626598aa4b28b0bb41672fdf25303e74a99cc290638a0f076a703591",
+				"dweb:/ipfs/QmdrrdgfmLHtw9zBsei7hyYgkeKZP3HeyhEVk5SWGXVquF"
+			]
+		}
+	},
+	"version": 1
+}
