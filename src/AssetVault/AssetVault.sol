@@ -71,12 +71,12 @@ contract AssetVault is AccessControl {
         userShares[_msgSender()].assetShares[_asset] += _amount;
     }
 
-
     function withdrawProfits() external {
         uint256 profitShare = calculateUserProfitShare(_msgSender());
         // userProfits[_msgSender()] = 0;
         IERC20(address(supportedAssets[0])).transfer(_msgSender(), profitShare);
     }
+
     function withdraw(address _asset, uint256 _amount) external {
         require(userShares[_msgSender()].assetShares[_asset] >= _amount, "Insufficient balance");
         totalVaultBalance[_asset] -= _amount;
@@ -84,7 +84,7 @@ contract AssetVault is AccessControl {
         // Proportional Profit Calculation (more on this below)
         uint256 profitShare = calculateUserProfitShare(_msgSender());
         // Distribute profits to user
-        uint256  vaultShare = profitShare * performanceFeePercentage / 100;
+        uint256 vaultShare = profitShare * performanceFeePercentage / 100;
         // Transfer Fees to the vault
         uint256 userShare = profitShare - vaultShare;
 
@@ -92,10 +92,9 @@ contract AssetVault is AccessControl {
         // Update user deposit records accordingly
         userShares[_msgSender()].totalShares -= estimateAssetValue(_asset, currentAssetShares);
         userShares[_msgSender()].assetShares[_asset] = currentAssetShares;
-        
+
         IERC20(_asset).transfer(_admin, vaultShare);
         IERC20(_asset).transfer(_msgSender(), userShare);
-
     }
 
     function calculateUserProfitShare(address _user) internal view returns (uint256) {
@@ -108,14 +107,15 @@ contract AssetVault is AccessControl {
         address _asset1,
         uint256 _amount1,
         address _asset2,
-        uint256 _amount2,
-        address _recipient
+        uint256 _amount2
     )
         external
         onlyRole(VAULT_MANAGER_ROLE)
     {
         // Logic to execute the trade on Uniswap
-        tradeContract.swapExactInputSingle(_asset1, _asset2, _amount1, _amount2, _recipient, performanceFeePercentage);
+        tradeContract.swapExactInputSingle(
+            _asset1, _asset2, _amount1, _amount2, address(this), performanceFeePercentage
+        );
 
         // Simplified profit estimation:
         uint256 currentValue = estimateAssetValue(address(_asset2), _amount2); // Assuming you fetch the value of
