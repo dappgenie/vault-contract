@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
-import {AssetVault} from "../AssetVault/AssetVault.sol";
-import {IVaultManager} from "./IVaultManager.sol";
+import { AssetVault } from "../AssetVault/AssetVault.sol";
+import { IVaultManager } from "./IVaultManager.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract VaultManager is AccessControl, IVaultManager {
@@ -12,7 +12,7 @@ contract VaultManager is AccessControl, IVaultManager {
     AssetVault[] public managedVaults;
 
     constructor() {
-        grantRole(DEFAULT_ADMIN_ROLE, _msgSender()); // Deployer gets admin role
+        _grantRole(DEFAULT_ADMIN_ROLE, _msgSender()); // Deployer gets admin role
         _setRoleAdmin(TRADER_ROLE, ADMIN_ROLE); // Admins can manage trader role
     }
 

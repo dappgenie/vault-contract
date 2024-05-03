@@ -18,3 +18,8 @@ yarn.lock
 !broadcast
 broadcast/*
 broadcast/*/31337/
+
+
+src/.deps
+src/*/artifacts
+src/.states
