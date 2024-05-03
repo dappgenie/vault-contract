@@ -1,11 +1,10 @@
-// SPDX-License-Identifier: MIT 
+// SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
-import "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol"; 
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
-import {ITradingContract} from "./ITrade.sol";
-
+import {TransferHelper} from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
+import { ITradingContract } from "./ITrade.sol";
 
 contract TradingContract is ITradingContract {
     ISwapRouter public immutable swapRouter;
@@ -15,7 +14,17 @@ contract TradingContract is ITradingContract {
     }
 
     // Function to swap `amountIn` of one token for as much as possible of another token
-    function swapExactInputSingle(address tokenIn, address tokenOut, uint256 amountIn, address recipient, uint24 poolFee) external returns (uint256 amountOut) {
+    function swapExactInputSingle(
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address recipient,
+        uint8 poolFee
+    )
+        external
+        returns (uint256 amountOut)
+    {
         // Transfer the specified amount of `tokenIn` to this contract.
         TransferHelper.safeTransferFrom(tokenIn, recipient, address(this), amountIn);
 
@@ -30,7 +39,7 @@ contract TradingContract is ITradingContract {
             recipient: recipient,
             deadline: block.timestamp,
             amountIn: amountIn,
-            amountOutMinimum: 0,
+            amountOutMinimum: amountOutMin,
             sqrtPriceLimitX96: 0
         });
 
