@@ -22,6 +22,7 @@
 [etherscan]
   polygon = { key = "${POLYGONSCAN_API_KEY}" }
   polygon-amoy = { key = "${POLYGONSCAN_API_KEY}" }
+  sepolia = { key = "${SEPOLIA_API_KEY}" }
 
 [fmt]
   bracket_spacing = true
@@ -36,3 +37,4 @@
 [rpc_endpoints]
   polygon = "https://polygon-mainnet.infura.io/v3/${API_KEY_INFURA}"
   polygon_amoy = "https://rpc-amoy.polygon.technology/"
+  sepolia = "https://sepolia.infura.io/v3/${API_KEY_INFURA}"
