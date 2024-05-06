@@ -22,7 +22,7 @@ contract VaultManager is AccessControl, IVaultManager {
     }
 
     function addTrader(address _trader) external onlyRole(ADMIN_ROLE) {
-        grantRole(TRADER_ROLE, _trader);
+        _grantRole(TRADER_ROLE, _trader);
     }
 
     function removeTrader(address _trader) external onlyRole(ADMIN_ROLE) {

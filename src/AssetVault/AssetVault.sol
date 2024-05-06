@@ -30,8 +30,8 @@ contract AssetVault is AccessControl {
     ITradingContract public tradeContract;
 
     constructor(address _vaultManager, address[] memory _initialAssets, uint8 _performanceFee, address _owner) {
-        grantRole(VAULT_MANAGER_ROLE, _vaultManager);
-        grantRole(DEFAULT_ADMIN_ROLE, _owner);
+        _grantRole(VAULT_MANAGER_ROLE, _vaultManager);
+        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _admin = _owner;
         _setRoleAdmin(VAULT_MANAGER_ROLE, ADMIN_ROLE); // Admins can manage vault manager role
         for (uint256 i = 0; i < _initialAssets.length; i++) {
