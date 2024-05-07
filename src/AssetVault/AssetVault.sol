@@ -6,6 +6,7 @@ import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol"
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 import { ITradingContract } from "../Trade/ITrade.sol";
+import { IVaultManager } from "../VaultManager/IVaultManager.sol";
 
 contract AssetVault is AccessControl {
     struct UserShares {
@@ -24,13 +25,14 @@ contract AssetVault is AccessControl {
     // mapping(address => uint256) public userProfits;
 
     address private _admin;
+    address private _vaultManager;
     uint8 public performanceFeePercentage;
     uint256 public lastRecordedProfit;
     uint256 public totalProfits;
-    ITradingContract public tradeContract;
 
-    constructor(address _vaultManager, address[] memory _initialAssets, uint8 _performanceFee, address _owner) {
-        _grantRole(VAULT_MANAGER_ROLE, _vaultManager);
+    constructor(address _vaultManagerAddr, address[] memory _initialAssets, uint8 _performanceFee, address _owner) {
+        _vaultManager = _vaultManagerAddr;
+        _grantRole(VAULT_MANAGER_ROLE, _vaultManagerAddr);
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _admin = _owner;
         _setRoleAdmin(VAULT_MANAGER_ROLE, ADMIN_ROLE); // Admins can manage vault manager role
@@ -39,10 +41,6 @@ contract AssetVault is AccessControl {
         }
         performanceFeePercentage = _performanceFee;
         lastRecordedProfit = 0; // Initialize on contract creation
-    }
-
-    function setTradeContract(address _tradeContract) external onlyRole(ADMIN_ROLE) {
-        tradeContract = ITradingContract(_tradeContract);
     }
 
     function setAssetToOracle(address _asset, address _oracle) external onlyRole(ADMIN_ROLE) {
@@ -113,7 +111,8 @@ contract AssetVault is AccessControl {
         onlyRole(VAULT_MANAGER_ROLE)
     {
         // Logic to execute the trade on Uniswap
-        tradeContract.swapExactInputSingle(
+        ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
+        trader.swapExactInputSingle(
             _asset1, _asset2, _amount1, _amount2, address(this), performanceFeePercentage
         );
 
