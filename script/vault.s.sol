@@ -2,7 +2,7 @@
 pragma solidity =0.8.25;
 
 import { Script } from "forge-std/src/Script.sol";
-import { VaultManager } from "../src/VaultManager/VaultManager_flattened.sol";
+import { VaultManager } from "../src/VaultManager/VaultManager.sol";
 
 contract VaultScript is Script {
     VaultManager public manager;
