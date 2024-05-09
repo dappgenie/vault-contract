@@ -11,7 +11,6 @@ contract VaultManager is AccessControl, IVaultManager {
     bytes32 public constant TRADER_ROLE = keccak256("TRADER_ROLE");
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     ITradingContract public tradingContract;
-    
 
     AssetVault[] public managedVaults;
 
@@ -28,8 +27,8 @@ contract VaultManager is AccessControl, IVaultManager {
         return tradingContract;
     }
 
-    function createVault(address[] memory _initialAssets, uint8 _performanceFee) external onlyRole(ADMIN_ROLE) {
-        AssetVault newVault = new AssetVault(address(this), _initialAssets, _performanceFee, _msgSender());
+    function createVault(address[] memory _initialAssets) external onlyRole(ADMIN_ROLE) {
+        AssetVault newVault = new AssetVault(address(this), _initialAssets, _msgSender());
         managedVaults.push(newVault);
     }
 
@@ -45,13 +44,12 @@ contract VaultManager is AccessControl, IVaultManager {
         uint256 _vaultIndex,
         address _asset1,
         uint256 _amount1,
-        address _asset2,
-        uint256 _amount2
+        address _asset2
     )
         external
         onlyRole(TRADER_ROLE)
     {
         AssetVault vault = managedVaults[_vaultIndex];
-        vault.trade(_asset1, _amount1, _asset2, _amount2);
+        vault.trade(_asset1, _amount1, _asset2);
     }
 }

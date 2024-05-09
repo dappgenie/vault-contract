@@ -6,7 +6,7 @@ interface IVaultManager {
 
     function getTraderContract() external view returns (ITradingContract);
 
-    function createVault(address[] memory _initialAssets, uint8 _performanceFee) external;
+    function createVault(address[] memory _initialAssets) external;
 
     function addTrader(address _trader) external;
 
@@ -16,8 +16,7 @@ interface IVaultManager {
         uint256 _vaultIndex,
         address _asset1,
         uint256 _amount1,
-        address _asset2,
-        uint256 _amount2
+        address _asset2
     )
         external;
 }

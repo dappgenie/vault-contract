@@ -26,11 +26,11 @@ contract AssetVault is AccessControl {
 
     address private _admin;
     address private _vaultManager;
-    uint8 public performanceFeePercentage;
+    uint24 public constant performanceFeePercentage = 3000;
     uint256 public lastRecordedProfit;
     uint256 public totalProfits;
 
-    constructor(address _vaultManagerAddr, address[] memory _initialAssets, uint8 _performanceFee, address _owner) {
+    constructor(address _vaultManagerAddr, address[] memory _initialAssets, address _owner) {
         _vaultManager = _vaultManagerAddr;
         _grantRole(VAULT_MANAGER_ROLE, _vaultManagerAddr);
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
@@ -40,7 +40,6 @@ contract AssetVault is AccessControl {
         for (uint256 i = 0; i < _initialAssets.length; i++) {
             supportedAssets.push(IERC20(_initialAssets[i]));
         }
-        performanceFeePercentage = _performanceFee;
         lastRecordedProfit = 0; // Initialize on contract creation
     }
 
@@ -48,10 +47,10 @@ contract AssetVault is AccessControl {
         assetToOracle[_asset] = AggregatorV3Interface(_oracle);
     }
 
-    // Add a function to update performance fees and check for roles
-    function updatePerformanceFee(uint8 _newFee) external onlyRole(ADMIN_ROLE) {
-        performanceFeePercentage = _newFee;
-    }
+    // // Add a function to update performance fees and check for roles
+    // function updatePerformanceFee(uint8 _newFee) external onlyRole(ADMIN_ROLE) {
+    //     performanceFeePercentage = _newFee;
+    // }
 
     function estimateVaultValue() public view returns (uint256) {
         uint256 totalValue = 0;
@@ -102,27 +101,19 @@ contract AssetVault is AccessControl {
         return profitShare;
     }
 
-    function trade(
-        address _asset1,
-        uint256 _amount1,
-        address _asset2,
-        uint256 _amount2
-    )
-        external
-        onlyRole(VAULT_MANAGER_ROLE)
-    {
+    function trade(address _asset1, uint256 _amount1, address _asset2) external onlyRole(VAULT_MANAGER_ROLE) {
         // Logic to execute the trade on Uniswap
         ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
-        trader.swapExactInputSingle(
-            _asset1, _asset2, _amount1, _amount2, address(this), performanceFeePercentage
-        );
+        IERC20(_asset1).approve(address(trader), _amount1);
+        // uint256 amountOut =
+        trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), performanceFeePercentage);
 
-        // Simplified profit estimation:
-        uint256 currentValue = estimateAssetValue(address(_asset2), _amount2); // Assuming you fetch the value of
-            // received assets
-        uint256 previousValue = estimateAssetValue(address(_asset1), _amount1);
-        uint256 profit = currentValue - previousValue;
-        totalProfits += profit;
+        // // Simplified profit estimation:
+        // uint256 currentValue = estimateAssetValue(address(_asset2), amountOut); // Assuming you fetch the value of
+        //     // received assets
+        // uint256 previousValue = estimateAssetValue(address(_asset1), _amount1);
+        // uint256 profit = currentValue - previousValue;
+        // totalProfits += profit;
     }
 
     function isAssetSupported(IERC20 _asset) internal view returns (bool) {

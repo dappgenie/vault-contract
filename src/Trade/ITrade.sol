@@ -6,9 +6,8 @@ interface ITradingContract {
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
-        uint256 amountOutMin,
         address recipient,
-        uint8 poolFee
+        uint24 poolFee
     )
         external
         returns (uint256 amountOut);

@@ -16,9 +16,8 @@ contract TradingContract is ITradingContract {
         address tokenIn,
         address tokenOut,
         uint256 amountIn,
-        uint256 amountOutMin,
         address recipient,
-        uint8 poolFee
+        uint24 poolFee
     )
         external
         returns (uint256 amountOut)
@@ -37,7 +36,7 @@ contract TradingContract is ITradingContract {
             recipient: recipient,
             deadline: block.timestamp,
             amountIn: amountIn,
-            amountOutMinimum: amountOutMin,
+            amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
