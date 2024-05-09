@@ -21,4 +21,4 @@ format:; forge fmt
 
 install :; forge install OpenZeppelin/openzeppelin-contracts
 
-deploy:; @forge script script/vault.s.sol:VaultScript --rpc-url ${SEPOLIA_RPC_URL} --private-key ${PRIVATE_KEY} --broadcast --verify -vvvv
+deploy:; @forge script script/vault.s.sol:VaultScript --rpc-url ${MUMBAI_RPC_URL} --private-key ${PRIVATE_KEY} --broadcast --verify -vvvv

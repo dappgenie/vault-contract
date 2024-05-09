@@ -2,17 +2,15 @@
 pragma solidity =0.8.25;
 
 import { ISwapRouter } from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { TransferHelper } from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
 import { ITradingContract } from "./ITrade.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+address constant SWAP_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+
 
 contract TradingContract is ITradingContract {
-    ISwapRouter public immutable swapRouter;
-
-    constructor(address _swapRouter) {
-        swapRouter = ISwapRouter(_swapRouter);
-    }
-
+    ISwapRouter private constant router = ISwapRouter(SWAP_ROUTER);
     // Function to swap `amountIn` of one token for as much as possible of another token
     function swapExactInputSingle(
         address tokenIn,
@@ -29,7 +27,7 @@ contract TradingContract is ITradingContract {
         TransferHelper.safeTransferFrom(tokenIn, recipient, address(this), amountIn);
 
         // Approve the router to spend the specified amount of `tokenIn`.
-        TransferHelper.safeApprove(tokenIn, address(swapRouter), amountIn);
+        TransferHelper.safeApprove(tokenIn, address(router), amountIn);
 
         // Set the parameters for the swap.
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
@@ -44,6 +42,6 @@ contract TradingContract is ITradingContract {
         });
 
         // Execute the swap.
-        amountOut = swapRouter.exactInputSingle(params);
+        amountOut = router.exactInputSingle(params);
     }
 }

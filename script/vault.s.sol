@@ -9,9 +9,7 @@ contract VaultScript is Script {
     uint256 public deployerPrivateKey;
     uint256 public chainId;
     address public owner;
-
-    function setUp() public { }
-
+    // address constant public swapRouter = 0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14;
     function run() public {
         // Private key of the deployer imported from the env.
         deployerPrivateKey = vm.envUint("PRIVATE_KEY");

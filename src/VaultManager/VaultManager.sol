@@ -15,11 +15,12 @@ contract VaultManager is AccessControl, IVaultManager {
 
     AssetVault[] public managedVaults;
 
-    constructor(address _swapRouter) {
+    constructor() {
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender()); // Deployer gets admin role
+        _grantRole(ADMIN_ROLE, _msgSender()); // Deployer gets admin role
         _setRoleAdmin(TRADER_ROLE, ADMIN_ROLE); // Admins can manage trader role
         // 0xfff9976782d46cc05630d1f6ebab18b2324d6b14
-        TradingContract trader = new TradingContract(_swapRouter);
+        TradingContract trader = new TradingContract();
         tradingContract = ITradingContract(address(trader));
     }
 
