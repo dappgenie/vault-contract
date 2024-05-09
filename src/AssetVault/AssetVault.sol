@@ -34,6 +34,7 @@ contract AssetVault is AccessControl {
         _vaultManager = _vaultManagerAddr;
         _grantRole(VAULT_MANAGER_ROLE, _vaultManagerAddr);
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
+        _grantRole(ADMIN_ROLE, _owner);
         _admin = _owner;
         _setRoleAdmin(VAULT_MANAGER_ROLE, ADMIN_ROLE); // Admins can manage vault manager role
         for (uint256 i = 0; i < _initialAssets.length; i++) {
