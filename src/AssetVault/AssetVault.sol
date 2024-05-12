@@ -26,7 +26,8 @@ contract AssetVault is AccessControl {
 
     address private _admin;
     address private _vaultManager;
-    uint24 public constant performanceFeePercentage = 3000;
+    uint24 public poolFee = 3000;
+    uint24 public profitFee = 10;
     uint256 public lastRecordedProfit;
     uint256 public totalProfits;
 
@@ -47,10 +48,14 @@ contract AssetVault is AccessControl {
         assetToOracle[_asset] = AggregatorV3Interface(_oracle);
     }
 
-    // // Add a function to update performance fees and check for roles
-    // function updatePerformanceFee(uint8 _newFee) external onlyRole(ADMIN_ROLE) {
-    //     performanceFeePercentage = _newFee;
-    // }
+    // // Add a function to update pool fee and check for roles
+    function updatePoolFee(uint8 _newPoolFee) external onlyRole(ADMIN_ROLE) {
+        poolFee = _newPoolFee;
+    }
+
+    function updateProfitFee(uint8 _newProfitFee) external onlyRole(ADMIN_ROLE) {
+        profitFee = _newProfitFee;
+    }
 
     function estimateVaultValue() public view returns (uint256) {
         uint256 totalValue = 0;
@@ -82,7 +87,7 @@ contract AssetVault is AccessControl {
         // Proportional Profit Calculation (more on this below)
         uint256 profitShare = calculateUserProfitShare(_msgSender());
         // Distribute profits to user
-        uint256 vaultShare = profitShare * performanceFeePercentage / 100;
+        uint256 vaultShare = profitShare * profitFee / 100;
         // Transfer Fees to the vault
         uint256 userShare = profitShare - vaultShare;
 
@@ -102,16 +107,29 @@ contract AssetVault is AccessControl {
     }
 
     function trade(address _asset1, uint256 _amount1, address _asset2) external onlyRole(VAULT_MANAGER_ROLE) {
+        // Get current balances before the trade
+        uint256 initialAsset1Balance = totalVaultBalance[_asset1];
+        uint256 initialAsset2Balance = totalVaultBalance[_asset2];
+
         // Logic to execute the trade on Uniswap
         ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
         IERC20(_asset1).approve(address(trader), _amount1);
-        // uint256 amountOut =
-        trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), performanceFeePercentage);
+        trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
+
+        // Calculate profit/loss based on actual balances after the trade
+        int256 asset1Diff = int256(totalVaultBalance[_asset1]) - int256(initialAsset1Balance);
+        int256 asset2Diff = int256(totalVaultBalance[_asset2]) - int256(initialAsset2Balance);
+
+        int256 profit = int256(estimateAssetValue(_asset2, uint256(asset2Diff)))
+            + int256(estimateAssetValue(_asset1, uint256(-asset1Diff))); // Note the negative sign for asset1Diff
+
+        totalProfits = uint256(int256(totalProfits) + profit);
 
         // // Simplified profit estimation:
         // uint256 currentValue = estimateAssetValue(address(_asset2), amountOut); // Assuming you fetch the value of
         //     // received assets
         // uint256 previousValue = estimateAssetValue(address(_asset1), _amount1);
+        // require(currentValue >= previousValue, "Trade resulted in a loss");
         // uint256 profit = currentValue - previousValue;
         // totalProfits += profit;
     }
