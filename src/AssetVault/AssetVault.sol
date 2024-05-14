@@ -10,7 +10,7 @@ import { ITradingContract } from "../Trade/ITrade.sol";
 import { IVaultManager } from "../VaultManager/IVaultManager.sol";
 import { IAssetVault } from "./IAssetVault.sol";
 
-contract AssetVault is AccessControl,IAssetVault {
+contract AssetVault is AccessControl, IAssetVault {
     struct UserPoints {
         uint256 points;
     }
@@ -149,7 +149,8 @@ contract AssetVault is AccessControl,IAssetVault {
     }
 
     function pointsValueInUSD(uint256 points) public view returns (uint256) {
-        return (points * estimateVaultValue()) / totalPoints;
+        (, uint256 usdValue) = Math.tryDiv((points * estimateVaultValue()), totalPoints);
+        return usdValue;
     }
 
     function estimateAssetValueInUSD(address _asset) public view returns (uint256 total, uint256 valueInUsd) {
