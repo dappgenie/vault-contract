@@ -2,6 +2,7 @@
 pragma solidity =0.8.25;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
@@ -9,6 +10,7 @@ import { ITradingContract } from "../Trade/ITrade.sol";
 import { IVaultManager } from "../VaultManager/IVaultManager.sol";
 
 contract AssetVault is AccessControl {
+    using Math for uint256;
     struct UserShares {
         uint256 totalShares;
         mapping(address => uint256) assetShares;
@@ -107,31 +109,20 @@ contract AssetVault is AccessControl {
     }
 
     function trade(address _asset1, uint256 _amount1, address _asset2) external onlyRole(VAULT_MANAGER_ROLE) {
-        // Get current balances before the trade
-        uint256 initialAsset1Balance = totalVaultBalance[_asset1];
-        uint256 initialAsset2Balance = totalVaultBalance[_asset2];
+        require(_asset1 != address(0) && _asset2 != address(0), "Asset addresses cannot be zero");
+        require(_amount1 > 0, "Trade amount must be positive");
 
+        // Get current balances before the trade
+        uint256 asset1Value = estimateAssetValue(_asset1, _amount1);
         // Logic to execute the trade on Uniswap
         ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
         IERC20(_asset1).approve(address(trader), _amount1);
-        trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
-
+        uint256 amountOut = trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
+        uint256 asset2Value = estimateAssetValue(_asset2, amountOut);
         // Calculate profit/loss based on actual balances after the trade
-        int256 asset1Diff = int256(totalVaultBalance[_asset1]) - int256(initialAsset1Balance);
-        int256 asset2Diff = int256(totalVaultBalance[_asset2]) - int256(initialAsset2Balance);
 
-        int256 profit = int256(estimateAssetValue(_asset2, uint256(asset2Diff)))
-            + int256(estimateAssetValue(_asset1, uint256(-asset1Diff))); // Note the negative sign for asset1Diff
-
-        totalProfits = uint256(int256(totalProfits) + profit);
-
-        // // Simplified profit estimation:
-        // uint256 currentValue = estimateAssetValue(address(_asset2), amountOut); // Assuming you fetch the value of
-        //     // received assets
-        // uint256 previousValue = estimateAssetValue(address(_asset1), _amount1);
-        // require(currentValue >= previousValue, "Trade resulted in a loss");
-        // uint256 profit = currentValue - previousValue;
-        // totalProfits += profit;
+        (bool success, uint256 profit) = Math.trySub(asset2Value, asset1Value);
+        totalProfits += profit;
     }
 
     function isAssetSupported(IERC20 _asset) internal view returns (bool) {
