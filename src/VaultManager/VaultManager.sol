@@ -7,11 +7,13 @@ import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol"
 import { TradingContract } from "../Trade/Trade.sol";
 import { ITradingContract } from "../Trade/ITrade.sol";
 
+
+
 contract VaultManager is AccessControl, IVaultManager {
     bytes32 public constant TRADER_ROLE = keccak256("TRADER_ROLE");
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     ITradingContract public tradingContract;
-
+    
     AssetVault[] public managedVaults;
 
     constructor() {

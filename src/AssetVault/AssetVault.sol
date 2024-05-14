@@ -8,30 +8,26 @@ import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/inte
 
 import { ITradingContract } from "../Trade/ITrade.sol";
 import { IVaultManager } from "../VaultManager/IVaultManager.sol";
+import { IAssetVault } from "./IAssetVault.sol";
 
-contract AssetVault is AccessControl {
-    using Math for uint256;
-    struct UserShares {
-        uint256 totalShares;
-        mapping(address => uint256) assetShares;
+contract AssetVault is AccessControl,IAssetVault {
+    struct UserPoints {
+        uint256 points;
     }
 
-    mapping(address => UserShares) private userShares;
+    mapping(address => UserPoints) public user;
 
-    AggregatorV3Interface internal dataFeed;
     bytes32 public constant VAULT_MANAGER_ROLE = keccak256("VAULT_MANAGER_ROLE");
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     IERC20[] public supportedAssets;
     mapping(address => uint256) public totalVaultBalance;
     mapping(address => AggregatorV3Interface) assetToOracle; // Store oracle addresses
-    // mapping(address => uint256) public userProfits;
 
     address private _admin;
     address private _vaultManager;
     uint24 public poolFee = 3000;
     uint24 public profitFee = 10;
-    uint256 public lastRecordedProfit;
-    uint256 public totalProfits;
+    uint256 public totalPoints;
 
     constructor(address _vaultManagerAddr, address[] memory _initialAssets, address _owner) {
         _vaultManager = _vaultManagerAddr;
@@ -43,7 +39,6 @@ contract AssetVault is AccessControl {
         for (uint256 i = 0; i < _initialAssets.length; i++) {
             supportedAssets.push(IERC20(_initialAssets[i]));
         }
-        lastRecordedProfit = 0; // Initialize on contract creation
     }
 
     function setAssetToOracle(address _asset, address _oracle) external onlyRole(ADMIN_ROLE) {
@@ -72,57 +67,56 @@ contract AssetVault is AccessControl {
         require(isAssetSupported(IERC20(_asset)), "Asset not supported");
         IERC20(_asset).transferFrom(_msgSender(), address(this), _amount);
         totalVaultBalance[_asset] += _amount;
-        userShares[_msgSender()].totalShares += estimateAssetValue(_asset, _amount);
-        userShares[_msgSender()].assetShares[_asset] += _amount;
+        uint256 points = estimateAssetValue(_asset, _amount);
+        user[_msgSender()].points += points;
+        totalPoints += points;
     }
 
-    function withdrawProfits() external {
-        uint256 profitShare = calculateUserProfitShare(_msgSender());
-        // userProfits[_msgSender()] = 0;
-        IERC20(address(supportedAssets[0])).transfer(_msgSender(), profitShare);
-    }
-
-    function withdraw(address _asset, uint256 _amount) external {
-        require(userShares[_msgSender()].assetShares[_asset] >= _amount, "Insufficient balance");
-        totalVaultBalance[_asset] -= _amount;
-
-        // Proportional Profit Calculation (more on this below)
-        uint256 profitShare = calculateUserProfitShare(_msgSender());
-        // Distribute profits to user
-        uint256 vaultShare = profitShare * profitFee / 100;
-        // Transfer Fees to the vault
-        uint256 userShare = profitShare - vaultShare;
-
-        uint256 currentAssetShares = userShares[_msgSender()].assetShares[_asset] - _amount;
-        // Update user deposit records accordingly
-        userShares[_msgSender()].totalShares -= estimateAssetValue(_asset, currentAssetShares);
-        userShares[_msgSender()].assetShares[_asset] = currentAssetShares;
-
-        IERC20(_asset).transfer(_admin, vaultShare);
+    function withdraw(address _asset) external {
+        require(isAssetSupported(IERC20(_asset)), "Asset not supported");
+        require(user[_msgSender()].points > 0, "Insufficient points");
+        // Distribute balance to user based on points and sent profit share to the vault
+        uint256 requestPoints = user[_msgSender()].points;
+        totalPoints -= requestPoints;
+        user[_msgSender()].points -= requestPoints;
+        uint256 shareValue = pointsValueInUSD(requestPoints);
+        require(shareValue > 0, "Share value must be greater than zero");
+        (bool success, uint256 profit) = Math.trySub(shareValue, requestPoints);
+        uint256 vaultShare;
+        uint256 userShare = estimateAssetAmount(_asset, shareValue);
+        require(totalVaultBalance[_asset] >= userShare, "Insufficient balance");
+        totalVaultBalance[_asset] -= userShare;
+        if (success) {
+            uint256 profitShare = ((profit / shareValue) * 100) * userShare;
+            vaultShare = profitFee * profitShare / 100;
+            userShare -= vaultShare;
+        }
+        if (vaultShare > 0) {
+            IERC20(_asset).transfer(_vaultManager, vaultShare);
+        }
         IERC20(_asset).transfer(_msgSender(), userShare);
     }
 
     function calculateUserProfitShare(address _user) internal view returns (uint256) {
-        uint256 userShare = (userShares[_user].totalShares * 1e18) / estimateVaultValue();
-        uint256 profitShare = (totalProfits * userShare) / 1e18;
-        return profitShare;
+        uint256 requestPoints = user[_user].points;
+        uint256 shareValue = pointsValueInUSD(requestPoints);
+        (, uint256 profit) = Math.trySub(shareValue, requestPoints);
+        return profit;
     }
 
     function trade(address _asset1, uint256 _amount1, address _asset2) external onlyRole(VAULT_MANAGER_ROLE) {
         require(_asset1 != address(0) && _asset2 != address(0), "Asset addresses cannot be zero");
         require(_amount1 > 0, "Trade amount must be positive");
-
         // Get current balances before the trade
-        uint256 asset1Value = estimateAssetValue(_asset1, _amount1);
+        uint256 asset1Points = estimateAssetValue(_asset1, _amount1);
         // Logic to execute the trade on Uniswap
         ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
         IERC20(_asset1).approve(address(trader), _amount1);
         uint256 amountOut = trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
-        uint256 asset2Value = estimateAssetValue(_asset2, amountOut);
-        // Calculate profit/loss based on actual balances after the trade
-
-        (bool success, uint256 profit) = Math.trySub(asset2Value, asset1Value);
-        totalProfits += profit;
+        uint256 asset2Points = estimateAssetValue(_asset2, amountOut);
+        totalPoints += asset2Points - asset1Points;
+        totalVaultBalance[_asset1] -= _amount1;
+        totalVaultBalance[_asset2] += amountOut;
     }
 
     function isAssetSupported(IERC20 _asset) internal view returns (bool) {
@@ -144,10 +138,22 @@ contract AssetVault is AccessControl {
         return val;
     }
 
-    // Helper to calculate current price per share
-    function currentPricePerShare(address asset) public view returns (uint256) {
-        uint256 totalAssetValue = estimateAssetValue(asset, totalVaultBalance[asset]);
-        uint256 totalShares = userShares[address(0)].assetShares[asset]; // Total shares for the asset
-        return totalShares == 0 ? 1e18 : totalAssetValue / totalShares; // 1e18 is the initial share price
+    function estimateAssetAmount(address _asset, uint256 _valueUSD) public view returns (uint256 amount) {
+        AggregatorV3Interface priceFeed = assetToOracle[_asset];
+        require(priceFeed != AggregatorV3Interface(address(0)), "Oracle not set for asset");
+        (, int256 price,,,) = priceFeed.latestRoundData();
+        require(price > 0, "Invalid price data");
+        uint256 decimals = uint256(priceFeed.decimals());
+        uint256 val = (_valueUSD * (10 ** decimals)) / uint256(price);
+        return val;
+    }
+
+    function pointsValueInUSD(uint256 points) public view returns (uint256) {
+        return (points * estimateVaultValue()) / totalPoints;
+    }
+
+    function estimateAssetValueInUSD(address _asset) public view returns (uint256 total, uint256 valueInUsd) {
+        uint256 value = estimateAssetValue(_asset, totalVaultBalance[_asset]);
+        return (totalVaultBalance[_asset], value);
     }
 }
