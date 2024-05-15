@@ -75,22 +75,26 @@ contract AssetVault is AccessControl, IAssetVault {
     function withdraw(address _asset) external {
         require(isAssetSupported(IERC20(_asset)), "Asset not supported");
         require(user[_msgSender()].points > 0, "Insufficient points");
-        // Distribute balance to user based on points and sent profit share to the vault
+
         uint256 requestPoints = user[_msgSender()].points;
         totalPoints -= requestPoints;
         user[_msgSender()].points -= requestPoints;
+
         uint256 shareValue = pointsValueInUSD(requestPoints);
         require(shareValue > 0, "Share value must be greater than zero");
+
         (bool success, uint256 profit) = Math.trySub(shareValue, requestPoints);
         uint256 vaultShare;
         uint256 userShare = estimateAssetAmount(_asset, shareValue);
         require(totalVaultBalance[_asset] >= userShare, "Insufficient balance");
+
         totalVaultBalance[_asset] -= userShare;
         if (success) {
-            uint256 profitShare = ((profit / shareValue) * 100) * userShare;
-            vaultShare = profitFee * profitShare / 100;
+            uint256 profitShare = (profit * userShare) / shareValue;
+            vaultShare = (profitFee * profitShare) / 100;
             userShare -= vaultShare;
         }
+
         if (vaultShare > 0) {
             IERC20(_asset).transfer(_vaultManager, vaultShare);
         }
