@@ -30,7 +30,7 @@ contract AssetVault is AccessControl, IAssetVault {
     uint256 public totalPoints;
 
     constructor(address _vaultManagerAddr, address[] memory _initialAssets, address _owner) {
-        _vaultManager = _vaultManagerAddr;
+        _vaultManager = _owner;
         _grantRole(VAULT_MANAGER_ROLE, _owner);
         _grantRole(VAULT_MANAGER_ROLE, _vaultManagerAddr);
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
@@ -40,6 +40,10 @@ contract AssetVault is AccessControl, IAssetVault {
         for (uint256 i = 0; i < _initialAssets.length; i++) {
             supportedAssets.push(IERC20(_initialAssets[i]));
         }
+    }
+
+    function setVaultManager(address _vaultManagerAddr) external onlyRole(ADMIN_ROLE) {
+        _vaultManager = _vaultManagerAddr;
     }
 
     function setAssetToOracle(address _asset, address _oracle) external onlyRole(ADMIN_ROLE) {
