@@ -10,7 +10,7 @@ import { ITradingContract } from "../Trade/ITrade.sol";
 import { IVaultManager } from "../VaultManager/IVaultManager.sol";
 import { IAssetVault } from "./IAssetVault.sol";
 
-contract AssetVault is AccessControl,IAssetVault {
+contract AssetVault is AccessControl, IAssetVault {
     struct UserPoints {
         uint256 points;
     }
@@ -107,14 +107,19 @@ contract AssetVault is AccessControl,IAssetVault {
     function trade(address _asset1, uint256 _amount1, address _asset2) external onlyRole(VAULT_MANAGER_ROLE) {
         require(_asset1 != address(0) && _asset2 != address(0), "Asset addresses cannot be zero");
         require(_amount1 > 0, "Trade amount must be positive");
-        // Get current balances before the trade
+
+        // Calculate asset points before the trade for _asset1
         uint256 asset1Points = estimateAssetValue(_asset1, _amount1);
         // Logic to execute the trade on Uniswap
         ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
         IERC20(_asset1).approve(address(trader), _amount1);
         uint256 amountOut = trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
+
+        // Calculate asset points after the trade for _asset2
         uint256 asset2Points = estimateAssetValue(_asset2, amountOut);
-        totalPoints += asset2Points - asset1Points;
+
+        // Update total points and vault balances
+        totalPoints = totalPoints - asset1Points + asset2Points;
         totalVaultBalance[_asset1] -= _amount1;
         totalVaultBalance[_asset2] += amountOut;
     }
