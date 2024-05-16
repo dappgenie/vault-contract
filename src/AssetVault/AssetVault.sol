@@ -20,7 +20,7 @@ contract AssetVault is AccessControl, IAssetVault {
     bytes32 public constant VAULT_MANAGER_ROLE = keccak256("VAULT_MANAGER_ROLE");
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     IERC20[] public supportedAssets;
-    mapping(address => uint256) public totalVaultBalance;
+    mapping(address => uint256) public vaultBalance;
     mapping(address => AggregatorV3Interface) assetToOracle; // Store oracle addresses
 
     address private _admin;
@@ -31,6 +31,7 @@ contract AssetVault is AccessControl, IAssetVault {
 
     constructor(address _vaultManagerAddr, address[] memory _initialAssets, address _owner) {
         _vaultManager = _vaultManagerAddr;
+        _grantRole(VAULT_MANAGER_ROLE, _owner);
         _grantRole(VAULT_MANAGER_ROLE, _vaultManagerAddr);
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(ADMIN_ROLE, _owner);
@@ -57,8 +58,7 @@ contract AssetVault is AccessControl, IAssetVault {
     function estimateVaultValue() public view returns (uint256) {
         uint256 totalValue = 0;
         for (uint256 i = 0; i < supportedAssets.length; i++) {
-            totalValue +=
-                estimateAssetValue(address(supportedAssets[i]), totalVaultBalance[address(supportedAssets[i])]);
+            totalValue += estimateAssetValue(address(supportedAssets[i]), vaultBalance[address(supportedAssets[i])]);
         }
         return totalValue;
     }
@@ -66,7 +66,7 @@ contract AssetVault is AccessControl, IAssetVault {
     function deposit(address _asset, uint256 _amount) external {
         require(isAssetSupported(IERC20(_asset)), "Asset not supported");
         IERC20(_asset).transferFrom(_msgSender(), address(this), _amount);
-        totalVaultBalance[_asset] += _amount;
+        vaultBalance[_asset] += _amount;
         uint256 points = estimateAssetValue(_asset, _amount);
         user[_msgSender()].points += points;
         totalPoints += points;
@@ -74,23 +74,29 @@ contract AssetVault is AccessControl, IAssetVault {
 
     function withdraw(address _asset) external {
         require(isAssetSupported(IERC20(_asset)), "Asset not supported");
-        require(user[_msgSender()].points > 0, "Insufficient points");
-
         uint256 requestPoints = user[_msgSender()].points;
-        totalPoints -= requestPoints;
-        user[_msgSender()].points -= requestPoints;
+        require(requestPoints > 0, "Insufficient points");
 
+        uint256 vaultValue = estimateVaultValue();
+        (, uint256 perPointValue) = Math.tryDiv(vaultValue, totalPoints);
         uint256 shareValue = pointsValueInUSD(requestPoints);
         require(shareValue > 0, "Share value must be greater than zero");
 
-        (bool success, uint256 profit) = Math.trySub(shareValue, requestPoints);
-        uint256 vaultShare;
         uint256 userShare = estimateAssetAmount(_asset, shareValue);
-        require(totalVaultBalance[_asset] >= userShare, "Insufficient balance");
+        uint256 availableBalance = vaultBalance[_asset];
+        if (userShare > availableBalance) {
+            userShare = availableBalance;
+        }
 
-        totalVaultBalance[_asset] -= userShare;
+        vaultBalance[_asset] -= userShare;
+        uint256 deductedValue = estimateAssetValue(_asset, userShare);
+        (, uint256 deductedPoints) = Math.tryDiv(estimateAssetValue(_asset, deductedValue), perPointValue);
+        user[_msgSender()].points -= deductedPoints;
+
+        uint256 vaultShare = 0;
+        (bool success, uint256 profit) = Math.trySub(deductedValue, deductedPoints);
         if (success) {
-            uint256 profitShare = (profit * userShare) / shareValue;
+            uint256 profitShare = (profit * userShare) / deductedValue;
             vaultShare = (profitFee * profitShare) / 100;
             userShare -= vaultShare;
         }
@@ -111,16 +117,34 @@ contract AssetVault is AccessControl, IAssetVault {
     function trade(address _asset1, uint256 _amount1, address _asset2) external onlyRole(VAULT_MANAGER_ROLE) {
         require(_asset1 != address(0) && _asset2 != address(0), "Asset addresses cannot be zero");
         require(_amount1 > 0, "Trade amount must be positive");
+
+        // Ensure there is enough balance to trade
+        require(vaultBalance[_asset1] >= _amount1, "Insufficient asset1 balance");
+
         // Get current balances before the trade
         uint256 asset1Points = estimateAssetValue(_asset1, _amount1);
+
         // Logic to execute the trade on Uniswap
         ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
         IERC20(_asset1).approve(address(trader), _amount1);
         uint256 amountOut = trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
+        require(amountOut > 0, "Trade failed or no output tokens");
+
         uint256 asset2Points = estimateAssetValue(_asset2, amountOut);
-        totalPoints += asset2Points - asset1Points;
-        totalVaultBalance[_asset1] -= _amount1;
-        totalVaultBalance[_asset2] += amountOut;
+
+        // Update points safely checking for underflows and overflows
+        if (asset2Points > asset1Points) {
+            uint256 pointsToAdd = asset2Points - asset1Points;
+            totalPoints += pointsToAdd;
+        } else {
+            uint256 pointsToSubtract = asset1Points - asset2Points;
+            require(totalPoints >= pointsToSubtract, "Total points underflow");
+            totalPoints -= pointsToSubtract;
+        }
+
+        // Update vault balances safely
+        vaultBalance[_asset1] -= _amount1;
+        vaultBalance[_asset2] += amountOut;
     }
 
     function isAssetSupported(IERC20 _asset) internal view returns (bool) {
@@ -158,7 +182,18 @@ contract AssetVault is AccessControl, IAssetVault {
     }
 
     function estimateAssetValueInUSD(address _asset) public view returns (uint256 total, uint256 valueInUsd) {
-        uint256 value = estimateAssetValue(_asset, totalVaultBalance[_asset]);
-        return (totalVaultBalance[_asset], value);
+        uint256 value = estimateAssetValue(_asset, vaultBalance[_asset]);
+        return (vaultBalance[_asset], value);
+    }
+
+    function emergencyWithdrawAll() external onlyRole(ADMIN_ROLE) {
+        for (uint256 i = 0; i < supportedAssets.length; i++) {
+            IERC20 asset = supportedAssets[i];
+            uint256 balance = vaultBalance[address(asset)];
+            if (balance > 0) {
+                vaultBalance[address(asset)] = 0;
+                IERC20(address(asset)).transfer(_admin, balance);
+            }
+        }
     }
 }
