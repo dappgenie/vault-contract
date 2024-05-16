@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.8.25;
 
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
@@ -11,6 +12,8 @@ import { IVaultManager } from "../VaultManager/IVaultManager.sol";
 import { IAssetVault } from "./IAssetVault.sol";
 
 contract AssetVault is AccessControl, IAssetVault {
+    using SafeERC20 for IERC20;
+
     struct UserPoints {
         uint256 points;
     }
@@ -78,37 +81,33 @@ contract AssetVault is AccessControl, IAssetVault {
 
     function withdraw(address _asset) external {
         require(isAssetSupported(IERC20(_asset)), "Asset not supported");
-        uint256 requestPoints = user[_msgSender()].points;
-        require(requestPoints > 0, "Insufficient points");
+        uint256 userPoints = user[_msgSender()].points;
+        require(userPoints > 0, "Insufficient points");
 
-        uint256 vaultValue = estimateVaultValue();
-        (, uint256 perPointValue) = Math.tryDiv(vaultValue, totalPoints);
-        uint256 shareValue = pointsValueInUSD(requestPoints);
-        require(shareValue > 0, "Share value must be greater than zero");
+        uint256 totalVaultValue = estimateVaultValue();
+        require(totalVaultValue > 0, "Vault value is zero");
 
-        uint256 userShare = estimateAssetAmount(_asset, shareValue);
-        uint256 availableBalance = vaultBalance[_asset];
-        if (userShare > availableBalance) {
-            userShare = availableBalance;
-        }
+        // Calculate the share value in USD that the user's points represent
+        uint256 userShareValue = (userPoints * totalVaultValue) / totalPoints;
 
-        vaultBalance[_asset] -= userShare;
-        uint256 deductedValue = estimateAssetValue(_asset, userShare);
-        (, uint256 deductedPoints) = Math.tryDiv(estimateAssetValue(_asset, deductedValue), perPointValue);
-        user[_msgSender()].points -= deductedPoints;
+        uint256 assetAmountToWithdraw = estimateAssetAmount(_asset, userShareValue);
+        require(vaultBalance[_asset] >= assetAmountToWithdraw, "Insufficient asset balance");
 
-        uint256 vaultShare = 0;
-        (bool success, uint256 profit) = Math.trySub(deductedValue, deductedPoints);
-        if (success) {
-            uint256 profitShare = (profit * userShare) / deductedValue;
-            vaultShare = (profitFee * profitShare) / 100;
-            userShare -= vaultShare;
-        }
+        // Adjust points and vault balance
+        user[_msgSender()].points -= userPoints;
+        vaultBalance[_asset] -= assetAmountToWithdraw;
 
-        if (vaultShare > 0) {
-            IERC20(_asset).transfer(_vaultManager, vaultShare);
-        }
-        IERC20(_asset).transfer(_msgSender(), userShare);
+        // Calculate profit fee and adjust withdrawal amount
+        uint256 profitFeeAmount = (profitFee * assetAmountToWithdraw) / 100;
+        assetAmountToWithdraw -= profitFeeAmount;
+
+        // Transfer profit fee to the vault manager
+        IERC20(_asset).safeTransfer(_vaultManager, profitFeeAmount);
+
+        // Transfer the remaining asset amount to the user
+        IERC20(_asset).safeTransfer(_msgSender(), assetAmountToWithdraw);
+
+        totalPoints -= userPoints; // Adjust total points after withdrawal
     }
 
     function calculateUserProfitShare(address _user) internal view returns (uint256) {
@@ -125,30 +124,29 @@ contract AssetVault is AccessControl, IAssetVault {
         // Ensure there is enough balance to trade
         require(vaultBalance[_asset1] >= _amount1, "Insufficient asset1 balance");
 
-        // Get current balances before the trade
-        uint256 asset1Points = estimateAssetValue(_asset1, _amount1);
-
-        // Logic to execute the trade on Uniswap
         ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
         IERC20(_asset1).approve(address(trader), _amount1);
         uint256 amountOut = trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
         require(amountOut > 0, "Trade failed or no output tokens");
 
-        uint256 asset2Points = estimateAssetValue(_asset2, amountOut);
+        // Recalculate points based on the new asset values
+        adjustPointsAfterTrade(_asset1, _amount1, _asset2, amountOut);
+    }
 
-        // Update points safely checking for underflows and overflows
-        if (asset2Points > asset1Points) {
-            uint256 pointsToAdd = asset2Points - asset1Points;
+    function adjustPointsAfterTrade(address asset1, uint256 amount1, address asset2, uint256 amountOut) internal {
+        uint256 asset1PointsBefore = estimateAssetValue(asset1, amount1);
+        uint256 asset2PointsAfter = estimateAssetValue(asset2, amountOut);
+        vaultBalance[asset1] -= amount1;
+        vaultBalance[asset2] += amountOut;
+
+        if (asset2PointsAfter > asset1PointsBefore) {
+            uint256 pointsToAdd = asset2PointsAfter - asset1PointsBefore;
             totalPoints += pointsToAdd;
         } else {
-            uint256 pointsToSubtract = asset1Points - asset2Points;
+            uint256 pointsToSubtract = asset1PointsBefore - asset2PointsAfter;
             require(totalPoints >= pointsToSubtract, "Total points underflow");
             totalPoints -= pointsToSubtract;
         }
-
-        // Update vault balances safely
-        vaultBalance[_asset1] -= _amount1;
-        vaultBalance[_asset2] += amountOut;
     }
 
     function isAssetSupported(IERC20 _asset) internal view returns (bool) {
