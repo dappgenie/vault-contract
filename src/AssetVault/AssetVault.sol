@@ -136,6 +136,8 @@ contract AssetVault is AccessControl, IAssetVault {
     function adjustPointsAfterTrade(address asset1, uint256 amount1, address asset2, uint256 amountOut) internal {
         uint256 asset1PointsBefore = estimateAssetValue(asset1, amount1);
         uint256 asset2PointsAfter = estimateAssetValue(asset2, amountOut);
+        vaultBalance[asset1] -= amount1;
+        vaultBalance[asset2] += amountOut;
 
         if (asset2PointsAfter > asset1PointsBefore) {
             uint256 pointsToAdd = asset2PointsAfter - asset1PointsBefore;
@@ -145,9 +147,6 @@ contract AssetVault is AccessControl, IAssetVault {
             require(totalPoints >= pointsToSubtract, "Total points underflow");
             totalPoints -= pointsToSubtract;
         }
-
-        vaultBalance[asset1] -= amount1;
-        vaultBalance[asset2] += amountOut;
     }
 
     function isAssetSupported(IERC20 _asset) internal view returns (bool) {
