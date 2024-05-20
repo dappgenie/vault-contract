@@ -6,6 +6,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+
 import { IAssetVault } from "./IAssetVault.sol";
 import { ISwapRouter } from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import { TransferHelper } from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
@@ -15,12 +16,9 @@ address constant SWAP_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 contract AssetVault is AccessControl, IAssetVault {
     using SafeERC20 for IERC20;
 
-    ISwapRouter private constant ROUTER = ISwapRouter(SWAP_ROUTER);
-
     event AssetDeposited(address indexed asset, uint256 amount);
     event AssetTraded(address indexed asset1, uint256 amount1, address indexed asset2, uint256 amount2);
     event AssetWithdrawn(address indexed asset, uint256 amount, address indexed user);
-
     struct UserPoints {
         uint256 points;
     }
@@ -85,15 +83,14 @@ contract AssetVault is AccessControl, IAssetVault {
         uint256 points = estimateAssetValue(_asset, _amount);
         user[_msgSender()].points += points;
         totalPoints += points;
-        emit AssetDeposited(_asset, _amount);
     }
 
     function withdraw(address _asset) external {
         require(isAssetSupported(IERC20(_asset)), "Asset not supported");
-        uint256 userPoints = user[_msgSender()].points; // User's Total Points
+        uint256 userPoints = user[_msgSender()].points;
         require(userPoints > 0, "Insufficient points");
 
-        uint256 totalVaultValue = estimateVaultValue(); // Total Vault Points
+        uint256 totalVaultValue = estimateVaultValue();
         require(totalVaultValue > 0, "Vault value is zero");
 
         // Calculate the share value in USD that the user's points represent
@@ -111,10 +108,10 @@ contract AssetVault is AccessControl, IAssetVault {
         assetAmountToWithdraw -= profitFeeAmount;
 
         // Transfer profit fee to the vault manager
-        IERC20(_asset).transfer(_vaultManager, profitFeeAmount);
+        IERC20(_asset).safeTransfer(_vaultManager, profitFeeAmount);
 
         // Transfer the remaining asset amount to the user
-        IERC20(_asset).transfer(_msgSender(), assetAmountToWithdraw);
+        IERC20(_asset).safeTransfer(_msgSender(), assetAmountToWithdraw);
 
         totalPoints -= userPoints; // Adjust total points after withdrawal
         emit AssetWithdrawn(_asset, assetAmountToWithdraw, _msgSender());
@@ -130,9 +127,9 @@ contract AssetVault is AccessControl, IAssetVault {
     function trade(address _asset1, uint256 _amount1, address _asset2) external onlyRole(VAULT_MANAGER_ROLE) {
         require(_asset1 != address(0) && _asset2 != address(0), "Asset addresses cannot be zero");
         require(_amount1 > 0, "Trade amount must be positive");
-        require(vaultBalance[_asset1] >= _amount1, "Insufficient asset1 balance");
 
-        uint256 asset1Points = estimateAssetValue(_asset1, _amount1);
+        // Ensure there is enough balance to trade
+        require(vaultBalance[_asset1] >= _amount1, "Insufficient asset1 balance");
         TransferHelper.safeApprove(_asset1, address(ROUTER), _amount1);
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: _asset1,
@@ -147,21 +144,25 @@ contract AssetVault is AccessControl, IAssetVault {
         uint256 amountOut = ROUTER.exactInputSingle(params);
         require(amountOut > 0, "Trade failed or no output tokens");
         emit AssetTraded(_asset1, _amount1, _asset2, amountOut);
-        uint256 asset2Points = estimateAssetValue(_asset2, amountOut);
 
-        // // Update points safely checking for underflows and overflows
-        if (asset2Points > asset1Points) {
-            uint256 pointsToAdd = asset2Points - asset1Points;
+        // Recalculate points based on the new asset values
+        adjustPointsAfterTrade(_asset1, _amount1, _asset2, amountOut);
+    }
+
+    function adjustPointsAfterTrade(address asset1, uint256 amount1, address asset2, uint256 amountOut) internal {
+        uint256 asset1PointsBefore = estimateAssetValue(asset1, amount1);
+        uint256 asset2PointsAfter = estimateAssetValue(asset2, amountOut);
+        vaultBalance[asset1] -= amount1;
+        vaultBalance[asset2] += amountOut;
+
+        if (asset2PointsAfter > asset1PointsBefore) {
+            uint256 pointsToAdd = asset2PointsAfter - asset1PointsBefore;
             totalPoints += pointsToAdd;
         } else {
-            uint256 pointsToSubtract = asset1Points - asset2Points;
+            uint256 pointsToSubtract = asset1PointsBefore - asset2PointsAfter;
             require(totalPoints >= pointsToSubtract, "Total points underflow");
             totalPoints -= pointsToSubtract;
         }
-
-        // Update vault balances safely
-        vaultBalance[_asset1] -= _amount1;
-        vaultBalance[_asset2] += amountOut;
     }
 
     function isAssetSupported(IERC20 _asset) internal view returns (bool) {
