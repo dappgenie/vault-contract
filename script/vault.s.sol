@@ -47,6 +47,12 @@ contract VaultScript is Script {
         vault.setAssetToOracle(USDC, USDC_USD);
         vault.setAssetToOracle(SHIB, SHIB_USD);
 
+        // vault.deposit(SHIB, 100_000_000_000_000_000_000_000);
+
+        // vault.trade(SHIB, 10_000_000_000_000_000_000_000, WMATIC);
+
+        // vault.emergencyWithdrawAll();
+
         vm.stopBroadcast();
     }
 }

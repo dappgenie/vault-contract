@@ -6,13 +6,17 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
-
-import { ITradingContract } from "../Trade/ITrade.sol";
-import { IVaultManager } from "../VaultManager/IVaultManager.sol";
 import { IAssetVault } from "./IAssetVault.sol";
 
+import { ISwapRouter } from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+import { TransferHelper } from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
+
+address constant SWAP_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+
 contract AssetVault is AccessControl, IAssetVault {
-    // using SafeERC20 for IERC20;
+    using SafeERC20 for IERC20;
+
+    ISwapRouter private constant ROUTER = ISwapRouter(SWAP_ROUTER);
 
     event AssetDeposited(address indexed asset, uint256 amount);
     event AssetTraded(address indexed asset1, uint256 amount1, address indexed asset2, uint256 amount2);
@@ -126,24 +130,26 @@ contract AssetVault is AccessControl, IAssetVault {
     function trade(address _asset1, uint256 _amount1, address _asset2) external onlyRole(VAULT_MANAGER_ROLE) {
         require(_asset1 != address(0) && _asset2 != address(0), "Asset addresses cannot be zero");
         require(_amount1 > 0, "Trade amount must be positive");
-
-        // Ensure there is enough balance to trade
         require(vaultBalance[_asset1] >= _amount1, "Insufficient asset1 balance");
 
-        // Get current balances before the trade
         uint256 asset1Points = estimateAssetValue(_asset1, _amount1);
-
-        // Logic to execute the trade on Uniswap
-        ITradingContract trader = IVaultManager(_vaultManager).getTraderContract();
-        IERC20(_asset1).approve(address(trader), _amount1);
-        trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
-        uint256 amountOut = trader.swapExactInputSingle(_asset1, _asset2, _amount1, address(this), poolFee);
-
+        TransferHelper.safeApprove(_asset1, address(ROUTER), _amount1);
+        ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
+            tokenIn: _asset1,
+            tokenOut: _asset2,
+            fee: poolFee,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: _amount1,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
+        uint256 amountOut = ROUTER.exactInputSingle(params);
         require(amountOut > 0, "Trade failed or no output tokens");
         emit AssetTraded(_asset1, _amount1, _asset2, amountOut);
         uint256 asset2Points = estimateAssetValue(_asset2, amountOut);
 
-        // Update points safely checking for underflows and overflows
+        // // Update points safely checking for underflows and overflows
         if (asset2Points > asset1Points) {
             uint256 pointsToAdd = asset2Points - asset1Points;
             totalPoints += pointsToAdd;

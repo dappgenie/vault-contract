@@ -4,16 +4,11 @@ pragma solidity =0.8.25;
 import { AssetVault } from "../AssetVault/AssetVault.sol";
 import { IVaultManager } from "./IVaultManager.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
-import { TradingContract } from "../Trade/Trade.sol";
-import { ITradingContract } from "../Trade/ITrade.sol";
-
-
 
 contract VaultManager is AccessControl, IVaultManager {
     bytes32 public constant TRADER_ROLE = keccak256("TRADER_ROLE");
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    ITradingContract public tradingContract;
-    
+
     AssetVault[] public managedVaults;
 
     constructor() {
@@ -21,13 +16,6 @@ contract VaultManager is AccessControl, IVaultManager {
         _grantRole(ADMIN_ROLE, _msgSender()); // Deployer gets admin role
         _grantRole(TRADER_ROLE, _msgSender()); // Deployer gets admin role
         _setRoleAdmin(TRADER_ROLE, ADMIN_ROLE); // Admins can manage trader role
-        // 0xfff9976782d46cc05630d1f6ebab18b2324d6b14
-        TradingContract trader = new TradingContract();
-        tradingContract = ITradingContract(address(trader));
-    }
-
-    function getTraderContract() external view returns (ITradingContract) {
-        return tradingContract;
     }
 
     function createVault(address[] memory _initialAssets) external onlyRole(ADMIN_ROLE) {
