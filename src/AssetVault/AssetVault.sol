@@ -7,7 +7,6 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { AggregatorV3Interface } from "@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 import { IAssetVault } from "./IAssetVault.sol";
-
 import { ISwapRouter } from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
 import { TransferHelper } from "@uniswap/v3-periphery/contracts/libraries/TransferHelper.sol";
 
@@ -79,6 +78,7 @@ contract AssetVault is AccessControl, IAssetVault {
     }
 
     function deposit(address _asset, uint256 _amount) external {
+        // Balance or not
         require(isAssetSupported(IERC20(_asset)), "Asset not supported");
         IERC20(_asset).transferFrom(_msgSender(), address(this), _amount);
         vaultBalance[_asset] += _amount;
@@ -90,10 +90,10 @@ contract AssetVault is AccessControl, IAssetVault {
 
     function withdraw(address _asset) external {
         require(isAssetSupported(IERC20(_asset)), "Asset not supported");
-        uint256 userPoints = user[_msgSender()].points;
+        uint256 userPoints = user[_msgSender()].points; // User's Total Points
         require(userPoints > 0, "Insufficient points");
 
-        uint256 totalVaultValue = estimateVaultValue();
+        uint256 totalVaultValue = estimateVaultValue(); // Total Vault Points
         require(totalVaultValue > 0, "Vault value is zero");
 
         // Calculate the share value in USD that the user's points represent
