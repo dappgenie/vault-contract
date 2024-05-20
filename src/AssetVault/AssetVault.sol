@@ -14,11 +14,14 @@ import { TransferHelper } from "@uniswap/v3-periphery/contracts/libraries/Transf
 address constant SWAP_ROUTER = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
 
 contract AssetVault is AccessControl, IAssetVault {
+    ISwapRouter private constant ROUTER = ISwapRouter(SWAP_ROUTER);
+
     using SafeERC20 for IERC20;
 
     event AssetDeposited(address indexed asset, uint256 amount);
     event AssetTraded(address indexed asset1, uint256 amount1, address indexed asset2, uint256 amount2);
     event AssetWithdrawn(address indexed asset, uint256 amount, address indexed user);
+
     struct UserPoints {
         uint256 points;
     }
